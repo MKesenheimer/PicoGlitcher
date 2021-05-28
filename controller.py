@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+"""
+Controller for the Raspberry Pi voltage glitcher.
+Author: Matthias Kesenheimer (m.kesenheimer@gmx.net)
+Copyright: Copyright 2021, Matthias Kesenheimer
+License: GPL
+Version: 0.7
+"""
+
 import serial
 import threading
 import time
