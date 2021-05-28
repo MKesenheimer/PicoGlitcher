@@ -4,7 +4,7 @@
  * @version     1.0.0
  * @author      Matthias Kesenheimer
  * @copyright   2021
- * @licence     MIT
+ * @licence     GPL
  *
  */
 
