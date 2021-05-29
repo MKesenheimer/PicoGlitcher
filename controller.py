@@ -74,6 +74,7 @@ if __name__ == "__main__":
           bts = bytes("p {}\n".format(p), "ascii")
           ser.write(bts)
           ser.write(b"g\n")
+          #ser.write(b"c\n")
           # TODO
           #if testDevice(): # JTAG etc
           #  print("SUCCESS")

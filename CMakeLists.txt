@@ -12,6 +12,7 @@ pico_add_extra_outputs(glitcher)
 
 target_link_libraries(glitcher
                       pico_stdlib
+                      pico_multicore
                       hardware_gpio
                       hardware_i2c
                       hardware_adc)
