@@ -1,0 +1,3 @@
+[submodule "pdnd"]
+	path = pdnd
+	url = https://github.com/stacksmashing/pdnd-lib.git

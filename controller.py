@@ -14,6 +14,12 @@ import threading
 import time
 import argparse
 
+CMD_DELAY = "d"
+CMD_PULSE = "p"
+CMD_GLITCH = "g"
+CMD_HELLO = "h"
+CMD_CHECK = "c"
+
 class listening(threading.Thread):
   """listening class capable of threading."""
 
@@ -64,16 +70,22 @@ if __name__ == "__main__":
   x.start()
   time.sleep(args.timeout[0])
 
+  bts = bytes("{}\n".format(CMD_HELLO), "ascii")
+  ser.write(bts)
+  time.sleep(1)
+  
   try:
     while True:
       for d in range(args.delay[0], args.delay[1] + 1, args.delay[2]):
         for p in range(args.pulse[0], args.pulse[1] + 1, args.pulse[2]):
           time.sleep(args.timeout[0])
-          bts = bytes("d {}\n".format(d), "ascii")
+          print("d: {}, p: {}".format(d, p))
+          bts = bytes("{} {}\n".format(CMD_DELAY, d), "ascii")
           ser.write(bts)
-          bts = bytes("p {}\n".format(p), "ascii")
+          bts = bytes("{} {}\n".format(CMD_PULSE, p), "ascii")
           ser.write(bts)
-          ser.write(b"g\n")
+          bts = bytes("{}\n".format(CMD_GLITCH), "ascii")
+          ser.write(bts)
           #ser.write(b"c\n")
           # TODO
           #if testDevice(): # JTAG etc
