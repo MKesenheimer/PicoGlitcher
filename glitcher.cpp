@@ -144,7 +144,7 @@ int main() {
       case CMD_GLITCH:
         power_cycle_target();
         // wait for start-up
-        //while(!gpio_get(1 + IN_NRF_VDD));
+        while(!gpio_get(1 + IN_NRF_VDD));
         glitch(delay, pulse);
         break;
       case CMD_CHECK:
