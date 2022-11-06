@@ -40,7 +40,8 @@ const uint OUT_TARGET_POWER = 0;
 const uint IN_NRF_VDD = 0;
 const uint32_t TARGET_POWER = 18;
 
-// TODO: check
+// This pin shows, if a glitching attack is active.
+// Not necessary, but could probably be helpful somehow 
 const uint PDND_GLITCH_ENABLE = 22;
 
 const uint8_t CMD_DELAY = 0x64;
@@ -75,7 +76,6 @@ void dv(uint32_t delay, uint32_t pulse) {
   pprintf("Glitcher\nD: %lu\nP: %lu", delay, pulse);
 }
 
-
 void glitch(uint32_t delay, uint32_t pulse) {
   //power_cycle_target();
   gpio_put(PDND_GLITCH_ENABLE, 1);
@@ -89,18 +89,6 @@ void glitch(uint32_t delay, uint32_t pulse) {
   gpio_put(PDND_GLITCH_ENABLE, 0);
   gpio_put(PDND_GLITCH, 0);
 }
-
-// Core 1 Main Code
-void core1_entry() {
-  save_and_disable_interrupts();
-  while (true) {
-    if (active) {
-      glitch(delay, pulse);
-      // TODO: check if glitch was successful
-    }
-  }
-}
-
 
 int main() {
   // init
@@ -120,9 +108,6 @@ int main() {
 
   // Sets up trigger & glitch output
   initialize_board();
-
-  // Start glitching on core 1
-  //multicore_launch_core1(core1_entry);
 
   active = false;
   while(1) {
