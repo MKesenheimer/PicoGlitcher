@@ -19,6 +19,8 @@ CMD_PULSE = "p"
 CMD_GLITCH = "g"
 CMD_HELLO = "h"
 CMD_CHECK = "c"
+CMD_PWR_CYCLING_EN = "e"
+CMD_PWR_CYCLING_DI = "f"
 
 class listening(threading.Thread):
   """listening class capable of threading."""

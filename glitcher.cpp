@@ -18,6 +18,19 @@
  * Time/Div: 1us
  * External trigger enabled, rising edge, DC
  * 
+ * Connections:
+ * Glitch (connected via mosfet on pico-pin 19): Connect this to a power line close to the target micro controller.
+ * GlitchEn (pico-pin 19; optional): Connect this to external hardware, i.e. a better suitable mosfet.
+ * Trig (pico-pin 18; optional): Connect this to the power source of the target board or some other source that can be used to trigger reliably glitching the target board. This is optional. If this pin is not connected, it is pulled up to VCC, and therefore the glitch is started without external trigger.
+ * Glitch Monitor (pico-pin 9, pdnd-pin 0; optional): Connect this to an oscilloscope to monitor the glitching process.
+ * Power Cycle (pico-pin 10, pdnd-pin 1; optional): use this output to power-cycle the target board. Must be done with additional external hardware.
+ * 
+ * Details:
+ * Glitch: will pull the line to GND after a initial "delay" with a duration of "pulse"
+ * GlitchEn: will be enabled if Glitch is pulled to GND.
+ * Trig: listens if the device is "ready". The glitch will only be triggered if the device is powered.
+ * Glitch Monitor: is enabled during glitching phase (from start of the delay to end of pulse).
+ * Power Cycle: can be used to power-cycle the target before every glitch.
 */
 
 #include <stdio.h>
@@ -32,53 +45,41 @@ extern "C" {
 #include "pdnd/pdnd_display.h"
 #include "pdnd/pio/pio_spi.h"
 }
-const uint SI_PIN = 3;
-const uint SO_PIN = 4;
-const uint CLK_PIN = 2;
 
-const uint OUT_TARGET_POWER = 0;
-const uint IN_NRF_VDD = 0;
-const uint32_t TARGET_POWER = 18;
+// This pin shows, if a glitching attack is currently active.
+// Not necessary, but could probably be helpful somehow.
+// Note: pdnd-pin 0 corresponds to Raspberry Pi pico pin 9
+const uint PDND_GLITCH_MONITOR = 9;
 
-// This pin shows, if a glitching attack is active.
-// Not necessary, but could probably be helpful somehow 
-const uint PDND_GLITCH_ENABLE = 22;
+// This pin can be used to additionally power-cycle the target.
+// Meaning, that before every glitch this pin is pulled to GND for 50ms.
+// Note: pdnd-pin 1 corresponds to Raspberry Pi pico pin 10
+const uint PDND_POWER_CYCLE = 10;
 
 const uint8_t CMD_DELAY = 0x64;
 const uint8_t CMD_PULSE = 0x70;
 const uint8_t CMD_GLITCH = 0x67;
 const uint8_t CMD_HELLO = 0x68;
 const uint8_t CMD_CHECK = 0x63;
-
-static uint32_t delay, pulse;
-static bool active;
-
-void initialize_board() {
-  gpio_init(TARGET_POWER);
-  gpio_put(TARGET_POWER, 0);
-  gpio_set_dir(TARGET_POWER, GPIO_OUT);
-  gpio_init(PDND_GLITCH);
-  gpio_put(PDND_GLITCH, 0);
-  gpio_set_dir(PDND_GLITCH, GPIO_OUT);
-  gpio_init(PDND_GLITCH_ENABLE);
-  gpio_put(PDND_GLITCH_ENABLE, 0);
-  gpio_set_dir(PDND_GLITCH_ENABLE, GPIO_OUT);
-}
+const uint8_t CMD_PWR_CYCLING_EN = 0x65;
+const uint8_t CMD_PWR_CYCLING_DI = 0x66;
 
 static inline void power_cycle_target() {
-  gpio_put(TARGET_POWER, 0);
+  gpio_put(PDND_POWER_CYCLE, 0);
   sleep_ms(50);
-  gpio_put(TARGET_POWER, 1);
+  gpio_put(PDND_POWER_CYCLE, 1);
 }
 
-void dv(uint32_t delay, uint32_t pulse) {
+void dv(uint32_t delay, uint32_t pulse, bool pwr_cycl_en) {
   cls(false);
-  pprintf("Glitcher\nD: %lu\nP: %lu", delay, pulse);
+  if (pwr_cycl_en)
+    pprintf("Glitcher\nD: %lu\nP: %lu\nPwr cycl. enabled.", delay, pulse);
+  else
+    pprintf("Glitcher\nD: %lu\nP: %lu\nPwr cycl. disabled.", delay, pulse);
 }
 
 void glitch(uint32_t delay, uint32_t pulse) {
-  //power_cycle_target();
-  gpio_put(PDND_GLITCH_ENABLE, 1);
+  gpio_put(PDND_GLITCH_MONITOR, 1);
   for (uint32_t i = 0; i < delay; ++i) {
     __asm__("NOP");
   }
@@ -86,7 +87,7 @@ void glitch(uint32_t delay, uint32_t pulse) {
   for (uint32_t i = 0; i < pulse; ++i) {
     __asm__("NOP");
   }
-  gpio_put(PDND_GLITCH_ENABLE, 0);
+  gpio_put(PDND_GLITCH_MONITOR, 0);
   gpio_put(PDND_GLITCH, 0);
 }
 
@@ -94,22 +95,17 @@ int main() {
   // init
   stdio_init_all();
   stdio_set_translate_crlf(&stdio_usb, false);
-  
-  // Wait for client to connect
-  //while (!tud_cdc_connected()) { sleep_ms(100);  }
-  //printf("tud_cdc_connected()\n");
+  uint32_t delay = 0, pulse = 0;
+  bool pwr_cycl_en = false;
 
   pdnd_initialize();
+  pdnd_initialize_glitcher();
   pdnd_enable_buffers(0);
   pdnd_display_initialize();
   pdnd_enable_buffers(1);
   cls(false);
   pprintf("Glitcher");
 
-  // Sets up trigger & glitch output
-  initialize_board();
-
-  active = false;
   while(1) {
     uint8_t cmd = std::cin.get();
     switch (cmd) {
@@ -118,18 +114,28 @@ int main() {
         pprintf("Glitcher\nClient connected.");
         break;
       case CMD_DELAY:
-        gpio_put(PDND_GLITCH_ENABLE, 0);
         std::cin >> delay;
-        dv(delay, pulse);
+        dv(delay, pulse, pwr_cycl_en);
         break;
       case CMD_PULSE:
         std::cin >> pulse;
-        dv(delay, pulse);
+        dv(delay, pulse, pwr_cycl_en);
+        break;
+      case CMD_PWR_CYCLING_EN:
+        pwr_cycl_en = true;
+        dv(delay, pulse, pwr_cycl_en);
+        break;
+      case CMD_PWR_CYCLING_DI:
+        pwr_cycl_en = false;
+        dv(delay, pulse, pwr_cycl_en);
         break;
       case CMD_GLITCH:
-        power_cycle_target();
-        // wait for start-up
-        while(!gpio_get(1 + IN_NRF_VDD));
+        if (pwr_cycl_en) {
+          // power-cycle the target with pdnd-pin 0
+          power_cycle_target();
+        }
+        // wait for external event, monitoring "Trig" pin
+        while(!gpio_get(PDND_TRIG));
         glitch(delay, pulse);
         break;
       case CMD_CHECK:
