@@ -31,6 +31,21 @@
  * Trig: listens if the device is "ready". The glitch will only be triggered if the device is powered.
  * Glitch Monitor: is enabled during glitching phase (from start of the delay to end of pulse).
  * Power Cycle: can be used to power-cycle the target before every glitch.
+ * 
+ * Using the glitcher:
+ * Option 1: No power-cycling via pdnd board
+ * In this case, power-cycling of the target device is not done by the pdnd board, but externally
+ * by additional hardware.
+ * For example, the pdnd-board is initialized and ready for a glich to start. Then the target
+ * board is power cycled by hand or by additional hardware.
+ * The glitch starts if the trigger condition is met, i.e. if the target board is powered.
+ * Power cycling can be done completely asynchronous to the controller script.
+ * 
+ * Option 2: Power-cycling is controlled by the pdnd board
+ * In this case an additional mosfet or switching unit is controlled by the Power Cycle pin.
+ * The target board is switched off for 50ms.
+ * The glitch starts if the trigger condition is met, i.e. if the target board is fully powered.
+ * Power cycling and glitching is done completely by the pdnd board. This makes the attack faster.
 */
 
 #include <stdio.h>
@@ -49,7 +64,10 @@ extern "C" {
 // This pin shows, if a glitching attack is currently active.
 // Not necessary, but could probably be helpful somehow.
 // Note: pdnd-pin 0 corresponds to Raspberry Pi pico pin 9
+//#define ENABLE_MONITOR_PIN
+#ifdef ENABLE_MONITOR_PIN
 const uint PDND_GLITCH_MONITOR = 9;
+#endif
 
 // This pin can be used to additionally power-cycle the target.
 // Meaning, that before every glitch this pin is pulled to GND for 50ms.
@@ -79,7 +97,9 @@ void dv(uint32_t delay, uint32_t pulse, bool pwr_cycl_en) {
 }
 
 void glitch(uint32_t delay, uint32_t pulse) {
+#ifdef ENABLE_MONITOR_PIN
   gpio_put(PDND_GLITCH_MONITOR, 1);
+#endif
   for (uint32_t i = 0; i < delay; ++i) {
     __asm__("NOP");
   }
@@ -87,8 +107,10 @@ void glitch(uint32_t delay, uint32_t pulse) {
   for (uint32_t i = 0; i < pulse; ++i) {
     __asm__("NOP");
   }
-  gpio_put(PDND_GLITCH_MONITOR, 0);
   gpio_put(PDND_GLITCH, 0);
+#ifdef ENABLE_MONITOR_PIN
+  gpio_put(PDND_GLITCH_MONITOR, 0);
+#endif
 }
 
 int main() {
@@ -96,7 +118,7 @@ int main() {
   stdio_init_all();
   stdio_set_translate_crlf(&stdio_usb, false);
   uint32_t delay = 0, pulse = 0;
-  bool pwr_cycl_en = false;
+  bool pwr_cycl_en = true;
 
   pdnd_initialize();
   pdnd_initialize_glitcher();
@@ -137,6 +159,13 @@ int main() {
         // wait for external event, monitoring "Trig" pin
         while(!gpio_get(PDND_TRIG));
         glitch(delay, pulse);
+        
+        // send command back to controller, that glitching is finished.
+        // necessary if power-cycling is disabled to synchronize with controller script.
+        if (!pwr_cycl_en) {
+          std::cout << "x";
+        }
+
         break;
       case CMD_CHECK:
         std::cout << "pio -> d: " << delay << ", p: " << pulse << std::endl;

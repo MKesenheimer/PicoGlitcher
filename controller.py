@@ -34,9 +34,12 @@ class listening(threading.Thread):
   def read(self):
     """function to read data from the serial port"""
     data = str("")
-    while self.__ser.in_waiting > 0:
-      payload = self.__ser.read(self.__ser.in_waiting)
-      data = payload.decode("ascii")
+    try:
+      while self.__ser.in_waiting > 0:
+        payload = self.__ser.read(self.__ser.in_waiting)
+        data = payload.decode("ascii")
+    except:
+      pass
     return data
 
   def run(self):
@@ -64,18 +67,34 @@ if __name__ == "__main__":
                       help='delay of the pulse')
   parser.add_argument('-p', dest='pulse', type=int, nargs=3, default=[1,100,1],
                       help='pulse width')
+  parser.add_argument('--pwr-cycling', dest='pwrcycling', type=str, nargs=1, default=["enabled"],
+                      help='enable or disable the optional power cycling of the target board.')
   args = parser.parse_args()
 
-  ser = serial.Serial(port=args.port[0], baudrate=args.baudrate[0], timeout=args.timeout[0])
-
+  try: 
+    ser = serial.Serial(port=args.port[0], baudrate=args.baudrate[0], timeout=args.timeout[0])
+  except: 
+    print("Error: Could not open serial port. Aborting.")
+    exit(0)
+    
   x = listening(ser)
   x.start()
+
   time.sleep(args.timeout[0])
 
+  # start by sending the hello command
   bts = bytes("{}\n".format(CMD_HELLO), "ascii")
   ser.write(bts)
   time.sleep(1)
-  
+
+  # enable / disable power cycling of target board
+  if args.pwrcycling[0] == "enabled":
+    bts = bytes("{}\n".format(CMD_PWR_CYCLING_EN), "ascii")
+    ser.write(bts)
+  else:
+    bts = bytes("{}\n".format(CMD_PWR_CYCLING_DI), "ascii")
+    ser.write(bts)
+
   try:
     while True:
       for d in range(args.delay[0], args.delay[1] + 1, args.delay[2]):
@@ -89,7 +108,21 @@ if __name__ == "__main__":
           bts = bytes("{}\n".format(CMD_GLITCH), "ascii")
           ser.write(bts)
           #ser.write(b"c\n")
-          # TODO
+          
+          # read from command line if glitch is finished. If yes, continue.
+          # necessary if powercycling is disabled.
+          if args.pwrcycling[0] != "enabled":
+            wd = 0
+            try:
+              while b'x' not in ser.read():
+                time.sleep(args.timeout[0])
+                wd += 1
+                if wd > 10:
+                  break
+            except:
+              pass
+
+          # TODO:
           #if testDevice(): # JTAG etc
           #  print("SUCCESS")
           #  exit(0)
