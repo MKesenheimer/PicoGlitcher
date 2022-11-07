@@ -13,6 +13,7 @@ import serial
 import threading
 import time
 import argparse
+import subprocess
 
 CMD_DELAY = "d"
 CMD_PULSE = "p"
@@ -21,6 +22,15 @@ CMD_HELLO = "h"
 CMD_CHECK = "c"
 CMD_PWR_CYCLING_EN = "e"
 CMD_PWR_CYCLING_DI = "f"
+
+def test_jtag():
+  try:
+    subprocess.check_output(['openocd', '-f', 'interface/jlink.cfg', '-c', 'transport select swd', '-f', 'testnrf.cfg', '-c', 'init;dump_image dump.bin 0x0 0x1000; exit'], stderr=subprocess.STDOUT)
+    return True
+  except Exception as e:
+    #print(e)
+    pass
+  return False
 
 class listening(threading.Thread):
   """listening class capable of threading."""
@@ -122,10 +132,10 @@ if __name__ == "__main__":
             except:
               pass
 
-          # TODO:
-          #if testDevice(): # JTAG etc
-          #  print("SUCCESS")
-          #  exit(0)
+          time.sleep(0.5)
+          if test_jtag():
+            print("SUCCESS")
+            sys.exit(0)
 
   except (KeyboardInterrupt, SystemExit):
     x.join(args.timeout[0])
